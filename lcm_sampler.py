@@ -1,7 +1,7 @@
 from comfy.samplers import *
 from comfy.k_diffusion.sampling import generic_step_sampler
 
-def ksampler_lcm(sampler_name, extra_options={}, inpaint_options={}):
+def ksampler_lcm(sampler_name, eta, extra_options={}, inpaint_options={}):
     class KSAMPLER(Sampler):
         def sample(self, model_wrap, sigmas, extra_args, callback, noise, latent_image=None, denoise_mask=None, disable_pbar=False):
             extra_args["denoise_mask"] = denoise_mask
@@ -27,34 +27,44 @@ def ksampler_lcm(sampler_name, extra_options={}, inpaint_options={}):
             if sigma_min == 0:
                 sigma_min = sigmas[-2]
 
-            samples = sample_lcm(model_k, noise, sigmas, extra_args=extra_args, callback=k_callback, disable=disable_pbar, **extra_options)
+            samples = sample_lcm(model_k, noise, sigmas, eta, extra_args=extra_args, callback=k_callback, disable=disable_pbar, **extra_options)
             return samples
     return KSAMPLER
 
-def LCMSampler_step(x, sigma, sigma_prev, noise, noise_sampler):
-    alpha_cumprod = 1 / ((sigma * sigma) + 1)
-    alpha_cumprod_prev = 1 / ((sigma_prev * sigma_prev) + 1)
+def LCMSampler_outer(eta):
+    def LCMSampler_step(x, sigma, sigma_prev, noise, noise_sampler):
+        alpha_cumprod = 1 / ((sigma * sigma) + 1)
+        alpha_cumprod_prev = 1 / ((sigma_prev * sigma_prev) + 1)
 
-    mu = (x - (1 - alpha_cumprod).sqrt() * noise) / alpha_cumprod.sqrt()
-    if sigma_prev > 0:
-        mu = alpha_cumprod_prev.sqrt() * mu + (1 - alpha_cumprod_prev).sqrt() * noise_sampler(sigma, sigma_prev)
-    return mu
+        mu = (x - (1 - alpha_cumprod).sqrt() * noise) / alpha_cumprod.sqrt()
+        if sigma_prev > 0:
+            # this is not mathematically correct, but eta=1 means lcm_sampler and eta=0 means ddim(euler).
+            noise_interp = (1 - eta) * noise + eta * noise_sampler(sigma, sigma_prev) 
+            mu = alpha_cumprod_prev.sqrt() * mu + (1 - alpha_cumprod_prev).sqrt() * noise_interp
+        return mu
+    return LCMSampler_step
 
 @torch.no_grad()
-def sample_lcm(model, x, sigmas, extra_args=None, callback=None, disable=None, noise_sampler=None):
-    return generic_step_sampler(model, x, sigmas, extra_args, callback, disable, noise_sampler, LCMSampler_step)
+def sample_lcm(model, x, sigmas, eta, extra_args=None, callback=None, disable=None, noise_sampler=None):
+    return generic_step_sampler(model, x, sigmas, extra_args, callback, disable, noise_sampler, LCMSampler_outer(eta))
 
 class SamplerLCM:
     @classmethod
     def INPUT_TYPES(s):
         return {"required":
-                    {}
-               }
+            {"eta": ("FLOAT", {
+                    "default": 1.0, 
+                    "min": 0.0, #Minimum value
+                    "max": 1.0, #Maximum value
+                    "step": 0.01 #Slider's step
+                }),
+            }
+        }
     RETURN_TYPES = ("SAMPLER",)
     CATEGORY = "sampling/custom_sampling"
 
     FUNCTION = "get_sampler"
 
-    def get_sampler(self):
-        sampler = ksampler_lcm("")()
+    def get_sampler(self, eta: float):
+        sampler = ksampler_lcm("", eta)()
         return (sampler, )
