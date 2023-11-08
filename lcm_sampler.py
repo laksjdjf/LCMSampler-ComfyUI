@@ -1,5 +1,6 @@
 from comfy.samplers import *
 from comfy.k_diffusion.sampling import generic_step_sampler
+import math
 
 def ksampler_lcm(sampler_name, eta, extra_options={}, inpaint_options={}):
     class KSAMPLER(Sampler):
@@ -39,7 +40,7 @@ def LCMSampler_outer(eta):
         mu = (x - (1 - alpha_cumprod).sqrt() * noise) / alpha_cumprod.sqrt()
         if sigma_prev > 0:
             # this is not mathematically correct, but eta=1 means lcm_sampler and eta=0 means ddim(euler).
-            noise_interp = (1 - eta) * noise + eta * noise_sampler(sigma, sigma_prev) 
+            noise_interp = math.sqrt(1 - eta) * noise + math.sqrt(eta) * noise_sampler(sigma, sigma_prev) 
             mu = alpha_cumprod_prev.sqrt() * mu + (1 - alpha_cumprod_prev).sqrt() * noise_interp
         return mu
     return LCMSampler_step
