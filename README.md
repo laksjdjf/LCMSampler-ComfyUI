@@ -10,8 +10,8 @@ LCMによる高速生成を生かすため、デコーダとしてTAESDを利用
 TAESD(`loader/Load TAESD`)はロードするとVAEと同じように使えるようになるはず。VRAMが足りなかったらmax_batch_sizeを小さくしてください。
 
 詳しくはワークフローで、以下からチェックポイントと二つのLoRAをダウンロードする必要があります。
-モデル：
-https://huggingface.co/furusu/SSD-1B-anime
+
+モデル：https://huggingface.co/furusu/SSD-1B-anime
 
 # credit
 https://github.com/luosiallen/latent-consistency-model
